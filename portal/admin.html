@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Admin — C.L.A. Quote Portal</title>
+<meta name="theme-color" content="#000000"><meta name="robots" content="noindex">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="portal.css">
+<script src="config.js"></script>
+<script src="../fee-snapshot.js?v=20261027a"></script>
+<script src="js/mock-data.js"></script><script src="js/mock-adapter.js"></script><script src="js/supabase-adapter.js"></script><script src="js/auth-adapter.js"></script><script src="js/portal-ui.js"></script>
+</head><body>
+<main class="pg">
+<div style="display:flex;gap:16px;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;margin-bottom:20px">
+ <div data-tour="a-welcome"><h1 class="pt">Admin</h1><p class="sub" style="margin:0">All reps, clients and saved quotes. Everything you do here is written to the audit log.</p><p class="sum" id="roleNote" style="margin:6px 0 0"></p></div>
+ <button class="btn" id="showInv" data-tour="a-invite-btn" type="button">Invite user</button>
+</div>
+<section class="card" id="invCard" data-tour="a-invite" hidden style="margin-bottom:24px">
+ <h2>Invite a user</h2>
+ <div id="iErr" class="msg err" role="alert"></div><div id="iOk" class="msg ok" role="status"></div>
+ <form id="inv" novalidate>
+  <div class="row"><div><label for="iEmail">Email</label><input type="email" id="iEmail" autocomplete="off" placeholder="name@clatitle.com"></div>
+   <div><label for="iRole">Role</label><select id="iRole"><option value="rep">Sales rep (CLA email required)</option><option value="client">Real estate agent / client</option></select><p class="sum" id="iRoleNote" style="margin:6px 0 0"></p></div></div>
+  <div class="row"><div><label for="iCell">Cell phone (optional)</label><input type="tel" id="iCell" inputmode="tel" maxlength="14" autocomplete="off" placeholder="(240) 555-0142" aria-describedby="iCellErr"><p class="fielderr" id="iCellErr" role="alert"></p></div><div></div></div>
+  <div class="row" id="iAlsoRow" hidden><div><label class="chk"><input type="checkbox" id="iAlso"> Also works as a rep (can be assigned clients; needs an @clatitle.com email)</label></div><div></div></div>
+  <div class="row" id="iRepRow" hidden><div><label for="iRep">Assign to rep (optional)</label><select id="iRep"></select></div><div></div></div>
+  <div style="display:flex;gap:10px"><button class="btn" type="submit">Send invite</button><button class="btn o" id="invCancel" type="button">Cancel</button></div>
+ </form>
+</section>
+<div class="seg" id="tabs" role="tablist"></div>
+
+<section class="card flush" id="pUsers" data-tour="a-users"><div class="sh"><h2>Users</h2><div class="grow"><span class="sum" id="uCount"></span></div></div>
+ <div class="tablewrap"><table><thead><tr><th>Person</th><th>Cell</th><th>Role</th><th>Rep</th><th>Status</th><th></th></tr></thead><tbody id="users"></tbody></table></div></section>
+<section class="card flush" id="pQuotes" hidden><div class="sh"><h2>All saved quotes</h2><div class="grow"><input type="text" id="qFilter" placeholder="Search client, rep, address" style="min-height:36px;width:260px" aria-label="Filter quotes"></div></div>
+ <div class="tablewrap"><table><thead><tr><th>Client / owner</th><th>Rep</th><th>Quote</th><th class="num">Price</th><th>Saved</th><th></th></tr></thead><tbody id="quotes"></tbody></table></div></section>
+<div id="pAssign" class="stack" data-tour="a-assign" hidden>
+ <section class="card"><h2>Assign a client to a rep</h2><p class="sub">Matches by email, so it works before the client has an account. Reassigning keeps history.</p>
+  <div id="aErr" class="msg err" role="alert"></div><div id="aOk" class="msg ok" role="status"></div>
+  <form id="asg" class="row" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;align-items:end;margin-bottom:0" novalidate>
+   <div><label for="aEmail">Client email</label><input type="email" id="aEmail" autocomplete="off"></div>
+   <div><label for="aRep">Rep</label><select id="aRep"></select></div><button class="btn" type="submit">Save assignment</button></form></section>
+ <section class="card flush"><div class="sh"><h2>Assignments</h2></div><div class="tablewrap"><table><thead><tr><th>Client email</th><th>Rep</th><th>Since</th><th>Status</th></tr></thead><tbody id="asgRows"></tbody></table></div></section>
+</div>
+<section class="card flush" id="pAudit" hidden><div class="sh"><h2>Audit log</h2><div class="grow"><span class="sum">Read only, newest first</span></div></div>
+ <div class="tablewrap"><table><thead><tr><th>When</th><th>Who</th><th>Action</th><th>Details</th></tr></thead><tbody id="auditRows"></tbody></table></div></section>
+<div id="pPricing" class="stack" data-tour="a-pricing" hidden>
+ <section class="card"><h2>Rep special pricing: settlement fee only</h2>
+  <p class="sub">Give one rep a lower <b>Settlement Fee to CLA Title &amp; Escrow</b>. It applies to that rep's own quotes and to the quotes of the clients (realtors) assigned to that rep. Title insurance premiums, recording fees, taxes and every other fee never change. Leave a box empty to keep the standard fee.</p>
+  <div id="pErr" class="msg err" role="alert"></div><div id="pOk" class="msg ok" role="status"></div>
+  <div class="row"><div><label for="pRep">Rep</label><select id="pRep"></select></div><div><label for="pState">Applies to</label><select id="pState"><option value="*">All states</option><option value="MD">Maryland only</option><option value="VA">Virginia only</option><option value="DC">Washington, DC only</option><option value="FL">Florida only</option></select></div></div>
+  <div class="tablewrap"><table><thead><tr><th>Settlement fee</th><th class="num">Standard fee</th><th class="num">Special fee for this rep</th></tr></thead>
+   <tbody id="pSlots"></tbody></table></div>
+  <p class="sum" id="pStdNote" style="margin:10px 0 0"></p>
+  <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap"><button class="btn" id="pSave" type="button">Save special pricing</button><button class="btn o" id="pClear" type="button">Back to standard for this selection</button></div>
+ </section>
+ <section class="card flush"><div class="sh"><h2>Reps with special pricing</h2><div class="grow"><span class="sum" id="pCount"></span></div></div>
+  <div class="tablewrap"><table><thead><tr><th>Rep</th><th>Applies to</th><th>Settlement fee</th><th class="num">Standard</th><th class="num">Special</th><th>Changed</th><th></th></tr></thead><tbody id="pRows"></tbody></table></div></section>
+</div>
+<section class="card flush" id="pFeedback" data-tour="a-feedback" hidden><div class="sh"><h2>Staff feedback</h2><div class="grow" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;align-items:center">
+  <label class="vh" for="fStatus">Status</label><select id="fStatus" style="min-height:36px;width:auto"><option value="">All statuses</option><option value="new">New</option><option value="notified">Notified</option><option value="approved">Approved</option><option value="dismissed">Dismissed</option></select>
+  <label class="vh" for="fCat">Category</label><select id="fCat" style="min-height:36px;width:auto"><option value="">All categories</option><option value="bug">Bug</option><option value="idea">Idea</option><option value="question">Question</option><option value="other">Other</option></select>
+  <input type="text" id="fFilter" placeholder="Search message, person, page" style="min-height:36px;width:220px" aria-label="Search feedback"></div></div>
+ <p class="sum" id="fNote" style="margin:0 20px 10px"></p>
+ <div class="tablewrap"><table><thead><tr><th>When</th><th>From</th><th>Category</th><th>Message</th><th>Status</th><th>Decision</th></tr></thead><tbody id="fbRows"></tbody></table></div></section>
+</main>
+<script>
+(async () => {
+  const { $, esc } = CLA; const { A, me } = await CLA.boot(["super_admin", "admin"]);
+  const panels = ["pUsers", "pQuotes", "pAssign", "pAudit", "pFeedback", "pPricing"];
+  let users = [], asg = [], quotes = [];
+  const uById = (id) => users.find((u) => u.id === id), nm = (id) => (id && uById(id) ? CLA.fullName(uById(id)) : id ? "(removed user)" : "System");
+  CLA.tabs($("tabs"), ["Users", "Quotes", "Assignments", "Audit log", "Feedback", "Rep pricing"], (i) => { panels.forEach((p, j) => ($(p).hidden = i !== j)); ({ 1: loadQuotes, 2: loadAsg, 3: loadAudit, 4: loadFeedback, 5: loadPricing })[i] && ({ 1: loadQuotes, 2: loadAsg, 3: loadAudit, 4: loadFeedback, 5: loadPricing })[i](); });
+
+  // What this signed-in person may do (the database enforces the same rules; this only hides / greys out the rest):
+  //   super admin: everything. admin: manage reps, clients and other admins (never a super admin, never promote; see CLA.canManage / README "Roles").
+  const isSuper = CLA.isSuperAdmin(me);
+  $("roleNote").innerHTML = isSuper ? "You are a <b>Super admin</b>: you can manage everyone, including admins and other super admins."
+    : "You are an <b>Admin</b>: you can manage reps, clients and other admins. Only a super admin can promote admins or touch a super admin.";
+  // invite form: an admin may only invite reps and clients
+  $("iRole").innerHTML = '<option value="rep">Sales rep (CLA email required)</option><option value="client">Real estate agent / client</option>' +
+    (isSuper ? '<option value="admin">Admin (full dashboard; manages reps, clients and other admins)</option><option value="super_admin">Super admin (everything, including admins)</option>' : "");
+  $("iRoleNote").textContent = isSuper ? "" : "Only a super admin can invite admins and super admins.";
+  const adminRole = (r) => r === "admin" || r === "super_admin";
+  const cnt = (f) => users.filter(f).length;
+
+  async function loadUsers() {
+    users = await A.adminListUsers(); asg = await A.adminListAssignments();
+    const sup = cnt((u) => u.role === "super_admin"), adm = cnt((u) => u.role === "admin"), alsoRep = cnt((u) => adminRole(u.role) && u.isRep);
+    $("uCount").textContent = users.length + " users · " + cnt((u) => u.role === "rep") + " reps · " + sup + " super admin" + (sup === 1 ? "" : "s") + " · " + adm + " admin" + (adm === 1 ? "" : "s") + " · " + cnt((u) => u.role === "client") + " clients" + (alsoRep ? " · " + alsoRep + " admin" + (alsoRep === 1 ? "" : "s") + " also work" + (alsoRep === 1 ? "s" : "") + " as rep" + (alsoRep === 1 ? "" : "s") : "");
+    // tooltip text lives in data-tip (shown by CSS on hover / keyboard focus, see .tip in portal.css; also works on a disabled button's wrapper)
+    const tip = (t) => t ? ' data-tip="' + esc(t) + '" tabindex="0"' : "";
+    $("users").innerHTML = users.map((u) => {
+      const a = asg.find((x) => x.active && x.clientUserId === u.id), rep = a && uById(a.repId);
+      // "Active" only means "not disabled" (a profile is active from invite time). lastSignInAt === null = invited but has never signed in (migration 15);
+      // undefined = unknown (migration not applied), which stays plain "Active" rather than guessing.
+      const st = u.status !== "active" ? '<span class="badge off">Disabled</span>'
+        : u.lastSignInAt === null ? '<span class="badge warn" title="Invited ' + esc(CLA.date(u.createdAt)) + '; has not signed in yet">Invited, never signed in</span>'
+        : '<span class="badge"' + (u.lastSignInAt ? ' title="Last signed in ' + esc(CLA.date(u.lastSignInAt)) + '"' : "") + ">Active</span>";
+      const mine = u.id === me.id, block = mine ? "" : CLA.manageBlock(me, u);   // "" = this person may be changed by me
+      // "Also works as a rep": only for admin / super admin rows; only a super admin may switch it (CLA email needed to switch on)
+      const cla = u.email.endsWith("@clatitle.com"), canAlso = isSuper && (cla || u.isRep);
+      const alsoTip = !isSuper ? "Only a super admin can switch this." : !cla && !u.isRep ? "Needs an @clatitle.com email." : "";
+      const alsoBox = adminRole(u.role) ? '<label class="chk also' + (alsoTip ? " tip" : "") + '"' + (canAlso ? ' data-tour="u-also"' : "") + tip(alsoTip) + '><input type="checkbox" data-also="' + esc(u.id) + '"' + (u.isRep ? " checked" : "") + (canAlso ? "" : " disabled") + '> Also works as a rep</label>' : "";
+      const roleSel = mine ? '<span class="badge admin">' + esc(CLA.roleLabel(u.role)) + " (you)</span>"
+        : block ? '<span class="badge admin tip"' + tip(block) + ">" + esc(CLA.roleLabel(u.role)) + "</span>"
+        : '<select data-tour="u-role" data-role="' + esc(u.id) + '" aria-label="Role" style="min-height:34px;padding:4px 30px 4px 10px;font-size:13px;width:auto">' + (isSuper ? ["super_admin", "admin", "rep", "client"] : u.role === "admin" ? ["admin", "rep", "client"] : ["rep", "client"]).map((r) => '<option value="' + r + '"' + (r === u.role ? " selected" : "") + ">" + CLA.roleLabel(r) + "</option>").join("") + "</select>";
+      const btn = '<button class="btn ' + (u.status === "active" ? "danger" : "o") + ' sm" data-st="' + esc(u.id) + '" data-to="' + (u.status === "active" ? "disabled" : "active") + '" type="button"' + (block ? ' disabled aria-disabled="true"' : "") + ">" + (u.status === "active" ? "Disable" : "Re-enable") + "</button>";
+      const action = mine ? "" : block ? '<span class="tip"' + tip(block) + ">" + btn + "</span>" : btn;   // the tooltip sits on a wrapper: a disabled button gets no hover / focus events
+      return "<tr><td><div class='who'>" + CLA.avImg(u, "sm") + "<div><b>" + esc(CLA.fullName(u)) + "</b><span>" + esc(u.email) + (u.companyName && u.role === "client" ? " · " + esc(u.companyName) : "") + "</span></div></div></td><td>" + (CLA.telLink(u.cellPhone) || '<span class="sum">—</span>') + "</td><td>" + roleSel + alsoBox + "</td><td>" + (u.role === "client" ? (rep ? esc(CLA.fullName(rep)) : '<span class="badge warn">Unassigned</span>') : "—") + "</td><td>" + st + '</td><td class="num">' + action + "</td></tr>";
+    }).join("");
+    CLA.fillAvatars(A, $("users"));
+    const reps = users.filter((u) => CLA.isRep(u) && u.status === "active");   // real reps AND admins / super admins who also work as a rep
+    const opts = reps.map((r) => '<option value="' + esc(r.id) + '">' + esc(CLA.fullName(r)) + (adminRole(r.role) ? " (admin + rep)" : "") + "</option>").join("");
+    $("aRep").innerHTML = opts; $("iRep").innerHTML = '<option value="">No rep yet</option>' + opts;
+  }
+  // ---- "Move N realtors to ..." (migration 12): a person who works as a rep and has ACTIVE clients cannot stop being a rep
+  // (made a client, or "also works as a rep" switched off) without handing those clients to another rep. The database refuses it otherwise.
+  const activeClientsOf = (u) => asg.filter((x) => x.active && x.repId === u.id);
+  const clientName = (x) => { const c = x.clientUserId && uById(x.clientUserId); return c ? CLA.fullName(c) : x.clientEmail; };
+  // pick the rep who takes over. Resolves to a user id, or null on cancel. `what` = e.g. "make Marcus Rep a client".
+  function pickSuccessor(u, clients, what) {
+    return new Promise((resolve) => {
+      const reps = users.filter((x) => CLA.isRep(x) && x.status === "active" && x.id !== u.id);
+      const n = clients.length, noun = n + " realtor" + (n === 1 ? "" : "s"), names = clients.slice(0, 4).map(clientName).map(esc).join(", ") + (n > 4 ? " and " + (n - 4) + " more" : "");
+      const ovl = document.createElement("div"); ovl.className = "ovl";
+      ovl.innerHTML = '<div class="dlg" role="dialog" aria-modal="true" aria-labelledby="dlgT"><h2 id="dlgT">Move ' + esc(noun) + ' to…</h2>' +
+        '<p class="sub">To ' + esc(what) + ", " + esc(CLA.fullName(u)) + " must first hand over " + (n === 1 ? "their realtor" : "their " + n + " realtors") + " (" + names + "). Nobody is left without a rep. History is kept.</p>" +
+        (reps.length ? '<label for="dlgRep">New rep</label><select id="dlgRep">' + reps.map((r) => '<option value="' + esc(r.id) + '">' + esc(CLA.fullName(r)) + (CLA.isAdmin(r) ? " (admin + rep)" : "") + " · " + activeClientsOf(r).length + " now</option>").join("") + "</select>"
+          : '<p class="msg err" style="display:block" role="alert" id="dlgNone">There is no other active rep to take over. Invite or enable a rep first, then try again.</p>') +
+        '<div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end">' + (reps.length ? '<button class="btn" id="dlgOk" type="button">Move ' + esc(noun) + " and continue</button>" : "") + '<button class="btn o" id="dlgNo" type="button">Cancel</button></div></div>';
+      const done = (v) => { document.removeEventListener("keydown", key); ovl.remove(); resolve(v); };
+      const key = (e) => { if (e.key === "Escape") done(null); };
+      document.addEventListener("keydown", key);
+      ovl.onclick = (e) => { if (e.target === ovl) done(null); };
+      document.body.appendChild(ovl);
+      ovl.querySelector("#dlgNo").onclick = () => done(null);
+      if (reps.length) { ovl.querySelector("#dlgOk").onclick = () => done(ovl.querySelector("#dlgRep").value); ovl.querySelector("#dlgRep").focus(); } else ovl.querySelector("#dlgNo").focus();
+    });
+  }
+  $("users").onchange = async (e) => {
+    const c = e.target.closest("[data-also]");
+    if (c) {
+      const u = uById(c.dataset.also); let succ = null;
+      if (!c.checked && u && activeClientsOf(u).length) { succ = await pickSuccessor(u, activeClientsOf(u), "switch off rep access for " + CLA.fullName(u)); if (!succ) { await loadUsers(); return; } }
+      try { await A.adminSetIsRep(c.dataset.also, c.checked, succ); CLA.toast(succ ? "Realtors moved. No longer works as a rep" : c.checked ? "Now also works as a rep" : "No longer works as a rep"); } catch (ex) { CLA.toast(ex.message); } await loadUsers(); return; }
+    const s = e.target.closest("[data-role]"); if (!s) return;
+    const u = uById(s.dataset.role), mine = u ? activeClientsOf(u) : [];
+    const capableAfter = s.value === "rep" || (CLA.isAdmin({ role: s.value }) && u && u.isRep);
+    let succ = null;
+    if (mine.length && !capableAfter) {
+      succ = await pickSuccessor(u, mine, "make " + CLA.fullName(u) + " " + (CLA.ROLE_NAMES[s.value] || s.value).toLowerCase().replace(/^client \/ agent$/, "a client"));
+      if (!succ) { await loadUsers(); return; }   // cancel: nothing changes, the dropdown snaps back
+    } else if (!confirm("Change this person's role to " + CLA.roleLabel(s.value) + "?")) { await loadUsers(); return; }
+    try { await A.adminSetRole(s.dataset.role, s.value, succ); CLA.toast(succ ? "Realtors moved. Role changed" : "Role changed"); } catch (ex) { CLA.toast(ex.message); } await loadUsers(); };
+  $("users").onclick = async (e) => { const b = e.target.closest("[data-st]"); if (!b) return;
+    try { await A.adminSetStatus(b.dataset.st, b.dataset.to); CLA.toast(b.dataset.to === "disabled" ? "User disabled" : "User re-enabled"); } catch (ex) { CLA.toast(ex.message); } await loadUsers(); };
+
+  async function loadQuotes() {
+    quotes = await A.adminListQuotes(); drawQuotes(); }
+  function drawQuotes() {
+    const f = $("qFilter").value.trim().toLowerCase();
+    const rows = quotes.filter((q) => !f || [nm(q.ownerId), nm(q.repId), q.propertyAddress, q.label].join(" ").toLowerCase().includes(f));
+    $("quotes").innerHTML = rows.length ? rows.map((q) => "<tr><td>" + esc(nm(q.ownerId)) + "</td><td>" + (q.repId ? esc(nm(q.repId)) : "—") + "</td><td><b>" + esc(q.label || q.propertyAddress || "Quote") + "</b>" + (q.deleted ? ' <span class="badge off">Deleted by client</span>' : "") + "<br>" + CLA.expiryHtml(q) + '</td><td class="num">' + CLA.money0(q.price) + "</td><td>" + CLA.date(q.createdAt) + '</td><td class="num"><a class="btn o sm" data-view="' + esc(q.id) + '" href="quote.html?id=' + encodeURIComponent(q.id) + '">View</a></td></tr>').join("")
+      : '<tr><td colspan="6" class="empty">No quotes match.</td></tr>'; }
+  $("qFilter").oninput = drawQuotes;
+  $("quotes").onclick = (e) => { const a = e.target.closest("[data-view]"); if (a) A.adminLogQuoteView(a.dataset.view).catch(() => {}); };
+
+  // ---- staff feedback: admin and super admin read everything; ONLY a super admin approves / dismisses (with a note). Messages are user content: escaped. ----
+  const FB_STATUS = { new: "New", notified: "Notified", approved: "Approved", dismissed: "Dismissed" }, FB_CAT = { bug: "Bug", idea: "Idea", question: "Question", other: "Other" };
+  let fbRows = [];
+  $("fNote").textContent = isSuper ? "You can approve or dismiss each item, with an optional note. The person sees the status and your note." : "Read only. Only a super admin can approve or dismiss feedback.";
+  async function loadFeedback() { fbRows = await A.adminListFeedback(); if (!users.length) users = await A.adminListUsers(); drawFeedback(); }
+  function drawFeedback() {
+    const st = $("fStatus").value, ct = $("fCat").value, q = $("fFilter").value.trim().toLowerCase();
+    const rows = fbRows.filter((f) => (!st || f.status === st) && (!ct || f.category === ct) && (!q || [f.message, nm(f.userId), f.pagePath].join(" ").toLowerCase().includes(q)));
+    $("fbRows").innerHTML = rows.length ? rows.map((f) => {
+      const who = uById(f.userId), badge = '<span class="badge' + (f.status === "dismissed" ? " off" : f.status === "new" ? " warn" : "") + '">' + esc(FB_STATUS[f.status] || f.status) + "</span>";
+      const decide = isSuper
+        ? '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><input type="text" maxlength="1000" data-note="' + esc(f.id) + '" placeholder="Note (optional)" aria-label="Note for this feedback" value="' + esc(f.decidedNote || "") + '" style="min-height:32px;width:180px;font-size:13px">' +
+          '<button class="btn sm" type="button" data-fb="' + esc(f.id) + '" data-to="approved">Approve</button><button class="btn o sm" type="button" data-fb="' + esc(f.id) + '" data-to="dismissed">Dismiss</button></div>'
+        : (f.decidedNote ? esc(f.decidedNote) : '<span class="sum">—</span>');
+      return "<tr><td>" + CLA.date(f.createdAt) + "</td><td><b>" + esc(who ? CLA.fullName(who) : "(removed user)") + "</b><span class='sum' style='display:block'>" + esc(CLA.ROLE_NAMES[f.roleAtSubmit] || f.roleAtSubmit) + "</span></td><td>" + esc(FB_CAT[f.category] || f.category) + "</td>" +
+        "<td style='white-space:pre-wrap;overflow-wrap:anywhere;max-width:420px'>" + esc(f.message) + (f.pagePath ? "<span class='sum' style='display:block'>Page: " + esc(f.pagePath) + "</span>" : "") + "</td><td>" + badge + (f.decidedAt ? "<span class='sum' style='display:block'>" + CLA.date(f.decidedAt) + "</span>" : "") + "</td><td>" + decide + "</td></tr>";
+    }).join("") : '<tr><td colspan="6" class="empty">No feedback matches.</td></tr>';
+  }
+  ["fStatus", "fCat"].forEach((i) => ($(i).onchange = drawFeedback)); $("fFilter").oninput = drawFeedback;
+  $("fbRows").onclick = async (e) => { const b = e.target.closest("[data-fb]"); if (!b) return; const note = $("fbRows").querySelector('[data-note="' + b.dataset.fb + '"]');
+    try { await A.adminSetFeedbackStatus(b.dataset.fb, b.dataset.to, note ? note.value : ""); CLA.toast(b.dataset.to === "approved" ? "Approved" : "Dismissed"); } catch (ex) { CLA.toast(ex.message); } await loadFeedback(); };
+
+  async function loadAsg() {
+    asg = await A.adminListAssignments(); const clientEmail = (a) => a.clientEmail;
+    $("asgRows").innerHTML = asg.length ? asg.map((a) => "<tr><td>" + esc(clientEmail(a)) + (a.clientUserId ? "" : ' <span class="sum">(no account yet)</span>') + "</td><td>" + esc(nm(a.repId)) + "</td><td>" + CLA.date(a.createdAt) + "</td><td>" + (a.active ? '<span class="badge">Active</span>' : '<span class="badge off">Previous</span>') + "</td></tr>").join("") : '<tr><td colspan="4" class="empty">No assignments yet.</td></tr>';
+  }
+  $("asg").onsubmit = async (e) => { e.preventDefault(); $("aErr").textContent = ""; $("aOk").textContent = "";
+    const em = $("aEmail").value.trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) { $("aErr").textContent = "Enter the client's email address."; return; }
+    try { await A.adminReassign(em, $("aRep").value); $("aOk").textContent = "Saved. " + em + " now belongs to " + nm($("aRep").value) + "."; $("aEmail").value = ""; await loadAsg(); await loadUsers(); }
+    catch (ex) { $("aErr").textContent = ex.message; } };
+
+  // ---- Rep pricing (migration 16): the settlement fee only. Admins and super admins (this whole page is admin-only; the database re-checks every write). ----
+  const SLOTS = [["purchase", "buyer", "Purchase / cash: buyer pays"], ["purchase", "seller", "Purchase / cash: seller pays"], ["refi", "buyer", "Refinance: borrower pays"]];
+  const STATE_NAME = { "*": "All states", MD: "Maryland", VA: "Virginia", DC: "Washington, DC", FL: "Florida" };
+  let ovs = [];
+  // standard settlement fee for a slot, from the built-in fee snapshot (the calculator uses the live fee sheet; they match unless the sheet changed since the snapshot)
+  const stdFees = (st, tx, side) => {
+    const rows = ((window.CLA_FEES_SNAPSHOT || {}).CLA_Fees || []).slice(1).filter((r) => String(r[0]).toUpperCase() === "Y" && /^settlement fee to cla title/i.test(r[2]) && String(r[3]).toLowerCase() === (tx === "refi" ? "refi" : "purchase") &&
+      (side === "seller" ? String(r[5]).toLowerCase() === "seller" : /^(buyer|borrower)$/i.test(r[5])) && (st === "*" || r[1] === st));
+    return [...new Set(rows.map((r) => +r[4]))];
+  };
+  const stdText = (st, tx, side) => { const v = stdFees(st, tx, side); return v.length ? v.map(CLA.money).join(" / ") : "—"; };
+  const repChoices = () => users.filter((u) => u.status === "active" && (u.role === "rep" || (adminRole(u.role) && u.isRep)));
+  function drawSlots() {
+    const rep = $("pRep").value, st = $("pState").value;
+    $("pSlots").innerHTML = SLOTS.map(([tx, side, label]) => { const o = ovs.find((x) => x.repId === rep && x.state === st && x.transaction === tx && x.paidBy === side);
+      return "<tr><td>" + esc(label) + '</td><td class="num">' + esc(stdText(st, tx, side)) + '</td><td class="num"><input type="text" inputmode="decimal" data-tx="' + tx + '" data-side="' + side + '" aria-label="Special fee, ' + esc(label) + '" placeholder="Standard" value="' + (o ? o.amount.toFixed(2) : "") + '" style="min-height:36px;width:130px;text-align:right"></td></tr>'; }).join("");
+    $("pStdNote").textContent = st === "*" ? "A fee set for one state beats the all-states fee. Standard fees shown come from the built-in fee snapshot; the calculator uses the live fee sheet." : "Applies only in " + STATE_NAME[st] + " and beats an all-states fee for the same line.";
+  }
+  function drawOverrides() {
+    const rows = ovs.slice().sort((a, b) => nm(a.repId).localeCompare(nm(b.repId)) || a.state.localeCompare(b.state) || a.transaction.localeCompare(b.transaction) || a.paidBy.localeCompare(b.paidBy));
+    $("pCount").textContent = new Set(rows.map((o) => o.repId)).size + " rep(s) · " + rows.length + " special fee" + (rows.length === 1 ? "" : "s");
+    $("pRows").innerHTML = rows.length ? rows.map((o) => { const lbl = (SLOTS.find((x) => x[0] === o.transaction && x[1] === o.paidBy) || [, , o.transaction + " / " + o.paidBy])[2];
+      return "<tr><td>" + esc(nm(o.repId)) + "</td><td>" + esc(STATE_NAME[o.state] || o.state) + "</td><td>" + esc(lbl) + '</td><td class="num">' + esc(stdText(o.state, o.transaction, o.paidBy)) + '</td><td class="num"><b>' + CLA.money(o.amount) + "</b></td><td>" + CLA.date(o.updatedAt) +
+        '</td><td><button type="button" class="btn o" data-clear="' + esc(o.id) + '" style="min-height:32px;padding:4px 12px">Clear</button></td></tr>'; }).join("")
+      : '<tr><td colspan="7" class="sum">No rep has special pricing. Everyone pays the standard settlement fee.</td></tr>';
+  }
+  async function loadPricing() {
+    if (!users.length) users = await A.adminListUsers();
+    try { ovs = await A.adminListRepFeeOverrides(); } catch (ex) { $("pErr").textContent = "Special pricing could not be loaded (" + ex.message + "). If migration 16 has not been applied to the database yet, that is why."; ovs = []; }
+    const keep = $("pRep").value, reps = repChoices();
+    $("pRep").innerHTML = reps.map((u) => '<option value="' + esc(u.id) + '">' + esc(CLA.fullName(u)) + (u.role === "rep" ? "" : " (" + (u.role === "super_admin" ? "super admin" : "admin") + " who reps)") + "</option>").join("");
+    if (keep && reps.some((u) => u.id === keep)) $("pRep").value = keep;
+    drawSlots(); drawOverrides();
+  }
+  $("pRep").onchange = $("pState").onchange = () => { $("pErr").textContent = ""; $("pOk").textContent = ""; drawSlots(); };
+  $("pSave").onclick = async () => { $("pErr").textContent = ""; $("pOk").textContent = ""; const rep = $("pRep").value, st = $("pState").value;
+    if (!rep) { $("pErr").textContent = "Choose a rep."; return; }
+    const jobs = [];
+    for (const inp of $("pSlots").querySelectorAll("input")) {
+      const tx = inp.dataset.tx, side = inp.dataset.side, v = inp.value.replace(/[$,\s]/g, ""), cur = ovs.find((x) => x.repId === rep && x.state === st && x.transaction === tx && x.paidBy === side);
+      if (v === "") { if (cur) jobs.push(["clear", { repId: rep, state: st, transaction: tx, paidBy: side }]); continue; }
+      const n = Number(v); if (!isFinite(n) || n < 0 || n > 99999.99) { $("pErr").textContent = "Enter a dollar amount from 0 to 99,999.99 (or leave the box empty for the standard fee)."; inp.focus(); return; }
+      if (!cur || Math.round(n * 100) !== Math.round(cur.amount * 100)) jobs.push(["set", { repId: rep, state: st, transaction: tx, paidBy: side, amount: Math.round(n * 100) / 100 }]);
+    }
+    if (!jobs.length) { $("pOk").textContent = "Nothing to change."; return; }
+    try { for (const [k, o] of jobs) await (k === "set" ? A.adminSetRepFeeOverride(o) : A.adminClearRepFeeOverride(o));
+      $("pOk").textContent = "Saved. " + nm(rep) + (st === "*" ? " (all states)" : " (" + STATE_NAME[st] + ")") + ": " + jobs.length + " change" + (jobs.length === 1 ? "" : "s") + ". New quotes use it right away."; }
+    catch (ex) { $("pErr").textContent = ex.message; }
+    await loadPricing(); };
+  $("pClear").onclick = async () => { $("pErr").textContent = ""; $("pOk").textContent = ""; const rep = $("pRep").value, st = $("pState").value, mine = ovs.filter((x) => x.repId === rep && x.state === st);
+    if (!mine.length) { $("pOk").textContent = "Already on standard pricing for this selection."; return; }
+    try { for (const o of mine) await A.adminClearRepFeeOverride({ repId: rep, state: st, transaction: o.transaction, paidBy: o.paidBy }); $("pOk").textContent = nm(rep) + " is back to the standard settlement fee" + (st === "*" ? " (all states)." : " in " + STATE_NAME[st] + "."); }
+    catch (ex) { $("pErr").textContent = ex.message; }
+    await loadPricing(); };
+  $("pRows").onclick = async (e) => { const b = e.target.closest("[data-clear]"); if (!b) return; const o = ovs.find((x) => x.id === b.dataset.clear); if (!o) return; $("pErr").textContent = ""; $("pOk").textContent = "";
+    try { await A.adminClearRepFeeOverride({ repId: o.repId, state: o.state, transaction: o.transaction, paidBy: o.paidBy }); $("pOk").textContent = "Cleared. " + nm(o.repId) + " is back to the standard fee for that line."; } catch (ex) { $("pErr").textContent = ex.message; }
+    await loadPricing(); };
+
+  async function loadAudit() {
+    const rows = await A.adminAuditLog(100);
+    $("auditRows").innerHTML = rows.map((r) => "<tr><td style='white-space:nowrap'>" + new Date(r.at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) + "</td><td>" + esc(nm(r.actorId)) + "</td><td><span class='badge off'>" + esc(r.action.replace(/_/g, " ")) + "</span></td><td class='sum'>" + esc(Object.entries(r.details || {}).filter(([, v]) => v != null && typeof v !== "object").map(([k, v]) => k + ": " + v).join(" · ")) + "</td></tr>").join("");
+  }
+
+  $("showInv").onclick = () => { $("invCard").hidden = false; $("iEmail").focus(); };
+  $("invCancel").onclick = () => { $("invCard").hidden = true; };
+  $("iRole").onchange = () => { $("iRepRow").hidden = $("iRole").value !== "client"; $("iAlsoRow").hidden = !adminRole($("iRole").value); if (!adminRole($("iRole").value)) $("iAlso").checked = false; };
+  CLA.bindPhoneInput($("iCell"), $("iCellErr"));
+  $("inv").onsubmit = async (e) => { e.preventDefault(); $("iErr").textContent = ""; $("iOk").textContent = "";
+    const email = $("iEmail").value.trim(), role = $("iRole").value;
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { $("iErr").textContent = "Enter a valid email address."; return; }
+    if ((role === "rep" || (adminRole(role) && $("iAlso").checked)) && !/@clatitle\.com$/i.test(email)) { $("iErr").textContent = "Reps must use an @clatitle.com email address."; return; }
+    if (!$("iCell").check()) { $("iErr").textContent = CLA.PHONE_MSG; $("iCell").focus(); return; }
+    try { const r = await A.adminInvite({ email, role, repId: role === "client" ? $("iRep").value || null : null, isRep: adminRole(role) && $("iAlso").checked, cellPhone: $("iCell").value });
+      $("iOk").textContent = "Invitation recorded for " + email + ". " + ((r && r.mockNote) || "They will get an email shortly."); $("iEmail").value = ""; $("iCell").value = ""; $("iAlso").checked = false; }
+    catch (ex) { $("iErr").textContent = ex.message; } };
+  await loadUsers();
+  CLA.initTour(A, me);   // first-time guided tour (or ?tour=1 replay); see js/tour.js
+})();
+</script></body></html>
